@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Evil Eye Game - Escape From Monster</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-b from-gray-900 to-black min-h-screen flex items-center justify-center">
+    
+    <div id="game-container" class="relative w-full max-w-4xl">
+        <!-- Score -->
+        <div id="score" class="absolute top-4 right-4 text-white text-3xl font-bold z-10 bg-black bg-opacity-50 px-4 py-2 rounded">
+            0m
+        </div>
+
+        <!-- Game Canvas -->
+        <div id="game-canvas" class="relative w-full h-96 bg-gradient-to-b from-gray-800 to-gray-900 border-4 border-gray-700 overflow-hidden shadow-2xl">
+            
+            <!-- Lights -->
+            <div class="absolute top-4 left-20 w-20 h-3 bg-yellow-200 opacity-40 blur-md"></div>
+            <div class="absolute top-4 right-32 w-20 h-3 bg-yellow-200 opacity-40 blur-md"></div>
+            
+            <!-- Fog -->
+            <div class="absolute inset-0 bg-gradient-to-r from-transparent via-gray-800 to-transparent opacity-20"></div>
+
+            <!-- Monster -->
+            <img id="monster" 
+                 src="https://i.postimg.cc/SYFbw3Qv/monster.png" 
+                 alt="Monster"
+                 class="absolute z-20 object-contain"
+                 style="left: -200px; bottom: 65px; width: 150px; height: 150px; filter: drop-shadow(0 0 30px rgba(255, 50, 0, 0.8)) drop-shadow(0 0 50px rgba(255, 0, 0, 0.5));">
+
+            <!-- Motorcyclist -->
+            <img id="player" 
+                 src="https://i.postimg.cc/PPQtYXK3/motorcycle.png" 
+                 alt="Motorcyclist"
+                 class="absolute z-30 object-contain"
+                 style="left: 120px; bottom: 65px; width: 100px; height: 70px; filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.7));">
+
+            <!-- Obstacles Container -->
+            <div id="obstacles"></div>
+
+            <!-- Ground -->
+            <div class="absolute bottom-0 w-full h-16 bg-gradient-to-b from-gray-700 via-gray-800 to-gray-900 border-t-4 border-gray-600">
+            </div>
+
+            <!-- Start Screen -->
+            <div id="start-screen" class="absolute inset-0 bg-black bg-opacity-90 flex items-center justify-center z-40">
+                <div class="text-center">
+                    <h1 class="text-5xl font-bold text-red-600 mb-6 drop-shadow-lg animate-pulse">
+                        ESCAPE FROM MONSTER
+                    </h1>
+                    <p class="text-2xl text-white mb-8">Press SPACE to start</p>
+                    <p class="text-gray-400 text-lg">SPACE - jump over obstacles</p>
+                </div>
+            </div>
+
+            <!-- Game Over Screen -->
+            <div id="gameover-screen" class="absolute inset-0 bg-red-900 bg-opacity-95 items-center justify-center z-40 hidden">
+                <div class="text-center">
+                    <h2 class="text-6xl font-bold text-white mb-6 drop-shadow-lg">GAME OVER!</h2>
+                    <p id="final-score" class="text-3xl text-gray-200 mb-8">Distance: 0m</p>
+                    <p class="text-2xl text-white animate-pulse">Press SPACE to restart</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Instructions -->
+        <div class="mt-6 text-center text-gray-400">
+            <p class="text-lg">Press SPACE to jump over obstacles</p>
+            <p class="text-sm mt-2">The monster is getting faster! How far can you run?</p>
+        </div>
+    </div>
+
+    <script>
+        // Game State
+        let gameStarted = false;
+        let gameOver = false;
+        let score = 0;
+        let playerY = 0;
+        let velocity = 0;
+        let isJumping = false;
+        let obstacles = [];
+        let monsterX = -200;
+        let frameCount = 0;
+
+        // Constants
+        const GROUND = 0;
+        const JUMP_FORCE = -18;
+        const GRAVITY = 0.8;
+        const PLAYER_X = 120;
+        const GAME_SPEED = 6;
+        const OBSTACLE_SPAWN_RATE = 90;
+
+        // Elements
+        const player = document.getElementById('player');
+        const monster = document.getElementById('monster');
+        const scoreEl = document.getElementById('score');
+        const startScreen = document.getElementById('start-screen');
+        const gameoverScreen = document.getElementById('gameover-screen');
+        const finalScoreEl = document.getElementById('final-score');
+        const obstaclesContainer = document.getElementById('obstacles');
+
+        // Keyboard Input
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                if (!gameStarted) {
+                    startGame();
+                } else if (!gameOver && playerY === GROUND && !isJumping) {
+                    jump();
+                } else if (gameOver) {
+                    restartGame();
+                }
+            }
+        });
+
+        function startGame() {
+            gameStarted = true;
+            startScreen.style.display = 'none';
+            gameLoop();
+        }
+
+        function restartGame() {
+            gameOver = false;
+            score = 0;
+            playerY = 0;
+            velocity = 0;
+            isJumping = false;
+            obstacles = [];
+            monsterX = -200;
+            frameCount = 0;
+            obstaclesContainer.innerHTML = '';
+            gameoverScreen.style.display = 'none';
+            gameoverScreen.classList.remove('flex');
+            updatePlayerPosition();
+            updateMonsterPosition();
+            gameLoop();
+        }
+
+        function jump() {
+            if (playerY === GROUND && !isJumping) {
+                isJumping = true;
+                velocity = JUMP_FORCE;
+            }
+        }
+
+        function updatePlayerPosition() {
+            player.style.bottom = (65 - playerY) + 'px';
+            player.style.transform = isJumping ? 'rotate(-5deg)' : 'rotate(0deg)';
+        }
+
+        function updateMonsterPosition() {
+            monster.style.left = monsterX + 'px';
+        }
+
+        function createObstacle() {
+            const obs = document.createElement('div');
+            obs.className = 'absolute bg-gradient-to-t from-gray-800 to-gray-600 border-2 border-gray-500 rounded-sm shadow-lg';
+            obs.style.left = '800px';
+            obs.style.bottom = '65px';
+            obs.style.width = '50px';
+            obs.style.height = '60px';
+            obs.innerHTML = '<div class="w-full h-1 bg-gray-500 mt-2"></div><div class="w-full h-1 bg-gray-500 mt-4"></div>';
+            obstaclesContainer.appendChild(obs);
+            obstacles.push({ element: obs, x: 800 });
+        }
+
+        function checkCollision(obsX) {
+            const playerLeft = PLAYER_X + 20;
+            const playerRight = PLAYER_X + 80;
+            const playerBottom = playerY + 70;
+            
+            const obsLeft = obsX;
+            const obsRight = obsX + 50;
+            const obsTop = -60;
+            
+            return playerRight > obsLeft && 
+                   playerLeft < obsRight && 
+                   playerBottom > obsTop;
+        }
+
+        function gameLoop() {
+            if (gameOver) return;
+
+            frameCount++;
+
+            // Update player physics
+            playerY += velocity;
+            velocity += GRAVITY;
+            
+            if (playerY >= GROUND) {
+                playerY = GROUND;
+                velocity = 0;
+                isJumping = false;
+            }
+            
+            updatePlayerPosition();
+
+            // Update obstacles
+            obstacles = obstacles.filter(obs => {
+                obs.x -= GAME_SPEED;
+                obs.element.style.left = obs.x + 'px';
+                
+                // Check collision
+                if (checkCollision(obs.x)) {
+                    gameOver = true;
+                    gameoverScreen.style.display = 'flex';
+                    gameoverScreen.classList.add('flex');
+                    finalScoreEl.textContent = `Distance: ${Math.floor(score / 10)}m`;
+                    return false;
+                }
+                
+                // Remove off-screen obstacles
+                if (obs.x < -50) {
+                    obs.element.remove();
+                    return false;
+                }
+                return true;
+            });
+
+            // Spawn new obstacles
+            if (frameCount % OBSTACLE_SPAWN_RATE === 0) {
+                createObstacle();
+            }
+
+            // Update monster
+            const monsterSpeed = 0.3 + (score / 10000);
+            monsterX = Math.min(monsterX + monsterSpeed, 80);
+            updateMonsterPosition();
+
+            // Update score
+            score++;
+            scoreEl.textContent = Math.floor(score / 10) + 'm';
+
+            // Continue game loop
+            if (!gameOver) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+    </script>
+</body>
+</html>
